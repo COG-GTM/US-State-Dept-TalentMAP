@@ -369,7 +369,7 @@ async function scanRepo(org, repo, token) {
   }
 
   // Vulnerability alerts
-  const vulnEnabled = await gh(`${base}/vulnerability-alerts`, token);
+  const vulnEnabled = await gh(`${base}/vulnerability-alerts`, token, { raw: true });
   result.security.vulnerabilityAlertsEnabled = vulnEnabled.status === 204;
   if (result.security.vulnerabilityAlertsEnabled) {
     const alerts = await gh(`${base}/dependabot/alerts?state=open&per_page=100`, token);
