@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CIO portfolio scanner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0d0d0d; --paper: #fafaf8; --card: #ffffff; --line: #e4e2dc;
+    --muted: #6b6b66; --green: #1d7a3e; --green-bg: #e4f3e9;
+    --yellow: #9a6c00; --yellow-bg: #fbf0d2; --red: #b02a23; --red-bg: #fbe4e2;
+    --accent: #0d0d0d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; background: var(--paper); color: var(--ink); font-size: 14px; }
+  h1, h2, h3 { font-family: 'Inter Tight', sans-serif; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 18px 32px; border-bottom: 1px solid var(--line); background: var(--card); }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand svg { display: block; }
+  .brand .wordmark { font-family: 'Inter Tight', sans-serif; font-weight: 700; font-size: 20px; letter-spacing: -0.02em; }
+  .brand .divider { width: 1px; height: 24px; background: var(--line); }
+  .brand .app { font-size: 14px; color: var(--muted); }
+  .meta { text-align: right; font-size: 12px; color: var(--muted); line-height: 1.5; }
+  main { max-width: 1500px; margin: 0 auto; padding: 24px 32px 80px; }
+  section { margin-top: 36px; }
+  h2 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+
+  /* Summary bar */
+  .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 24px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .stat .num { font-family: 'Inter Tight', sans-serif; font-size: 28px; font-weight: 700; }
+  .stat .lbl { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .stat.warn .num { color: var(--red); }
+  .stat.good .num { color: var(--green); }
+
+  /* Controls */
+  .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  input[type=search], select { font: inherit; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+  input[type=search] { width: 280px; }
+  .toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+
+  /* Table */
+  .tablewrap { overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { cursor: pointer; user-select: none; font-weight: 600; background: #f4f3ef; position: sticky; top: 0; }
+  th .arrow { font-size: 10px; color: var(--muted); }
+  tr:hover td { background: #f8f7f4; }
+  td.name { font-weight: 600; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+  td.stack { max-width: 240px; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+  a { color: inherit; }
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .pill.g { background: var(--green-bg); color: var(--green); }
+  .pill.y { background: var(--yellow-bg); color: var(--yellow); }
+  .pill.r { background: var(--red-bg); color: var(--red); }
+  .pill.n { background: #eeede9; color: var(--muted); font-weight: 500; }
+  .dot { font-size: 15px; }
+  .dot.yes { color: var(--green); } .dot.no { color: #c9c7c0; }
+
+  /* Heatmap */
+  .heatmap { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; }
+  .cell { padding: 9px 8px; border-radius: 7px; font-size: 11px; font-weight: 600; cursor: pointer; overflow: hidden; }
+  .cell .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cell .sc { font-size: 10px; font-weight: 500; opacity: 0.75; }
+  .cell.g { background: var(--green-bg); color: var(--green); }
+  .cell.y { background: var(--yellow-bg); color: var(--yellow); }
+  .cell.r { background: var(--red-bg); color: var(--red); }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  .legend span::before { content: '●'; margin-right: 5px; }
+  .legend .lg::before { color: var(--green); } .legend .ly::before { color: #d4a900; } .legend .lr::before { color: var(--red); }
+
+  /* Agents panel */
+  .agentgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; }
+  .agentcard { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--ink); border-radius: 10px; padding: 14px 16px; }
+  .agentcard h3 { font-size: 14px; margin-bottom: 6px; }
+  .agentcard .row { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+  .agentcard .row b { color: var(--ink); font-weight: 600; }
+  .agentcard code { background: #f1f0ec; padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+
+  /* Stale list */
+  .stale-table td.days { color: var(--red); font-weight: 600; }
+
+  /* Charts */
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .chartcard { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+  .bar { display: grid; grid-template-columns: 130px 1fr 44px; align-items: center; gap: 10px; margin-top: 8px; font-size: 12px; }
+  .bar .track { background: #efeee9; border-radius: 5px; height: 14px; overflow: hidden; }
+  .bar .fill { background: var(--ink); height: 100%; border-radius: 5px; }
+  .bar .ct { color: var(--muted); text-align: right; }
+
+  /* Audit modal */
+  .modal-bg { position: fixed; inset: 0; background: rgba(13,13,13,0.45); display: none; align-items: center; justify-content: center; z-index: 50; }
+  .modal-bg.open { display: flex; }
+  .modal { background: var(--card); border-radius: 12px; max-width: 760px; width: 92%; max-height: 80vh; overflow-y: auto; padding: 26px; }
+  .modal h3 { font-size: 17px; margin-bottom: 2px; }
+  .modal .close { float: right; cursor: pointer; font-size: 20px; color: var(--muted); border: 0; background: none; }
+  .ev { margin-top: 14px; }
+  .ev-item { padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .ev-item .src { font-size: 11px; color: var(--muted); font-family: monospace; }
+  .audit-note { font-size: 12px; color: var(--muted); margin-top: 10px; }
+
+  footer { border-top: 1px solid var(--line); margin-top: 60px; padding: 22px 32px; display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
+  #loader { padding: 60px 32px; text-align: center; color: var(--muted); }
+  #loader input { margin-top: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <svg width="26" height="26" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Cognition">
+      <g fill="#0d0d0d">
+        <path d="M50 6 L62 13 L62 27 L50 34 L38 27 L38 13 Z"/>
+        <path d="M76 21 L88 28 L88 42 L76 49 L64 42 L64 28 Z"/>
+        <path d="M76 51 L88 58 L88 72 L76 79 L64 72 L64 58 Z"/>
+        <path d="M50 66 L62 73 L62 87 L50 94 L38 87 L38 73 Z"/>
+        <path d="M24 51 L36 58 L36 72 L24 79 L12 72 L12 58 Z"/>
+        <path d="M24 21 L36 28 L36 42 L24 49 L12 42 L12 28 Z"/>
+      </g>
+    </svg>
+    <span class="wordmark">Cognition</span>
+    <span class="divider"></span>
+    <span class="app">CIO portfolio scanner</span>
+  </div>
+  <div class="meta" id="scanMeta"></div>
+</header>
+
+<div id="loader">
+  <p>Loading <code>portfolio-data.json</code>…</p>
+  <p style="margin-top:10px">If opening directly from disk, select the file:</p>
+  <input type="file" accept=".json" onchange="loadFromFile(this.files[0])">
+</div>
+
+<main id="app" style="display:none">
+
+  <div class="summary" id="summaryBar"></div>
+
+  <section>
+    <h2>Risk heatmap</h2>
+    <p class="sub">Every repository, color-coded by health score. Click a cell for the full audit trail of findings.</p>
+    <div class="legend"><span class="lg">Healthy (70–100)</span><span class="ly">Watch (40–69)</span><span class="lr">At risk (0–39)</span></div>
+    <div class="heatmap" id="heatmap"></div>
+  </section>
+
+  <section>
+    <h2>Agents &amp; automations</h2>
+    <p class="sub">Repositories with detected scheduled GitHub Actions, cron jobs, bot frameworks, or AI/LLM agent dependencies — full discoverability of what is running across the portfolio.</p>
+    <div class="agentgrid" id="agentPanel"></div>
+  </section>
+
+  <section>
+    <h2>Portfolio inventory</h2>
+    <p class="sub">All repositories. Click a column to sort; click a repo name for its audit trail.</p>
+    <div class="controls">
+      <input type="search" id="search" placeholder="Filter by name, language, dependency…">
+      <select id="filterSel">
+        <option value="all">All repos</option>
+        <option value="agents">With agents/automations</option>
+        <option value="noci">No CI</option>
+        <option value="nosec">No security scanning</option>
+        <option value="stale">Stale (6+ months)</option>
+        <option value="archived">Archived</option>
+      </select>
+    </div>
+    <div class="tablewrap">
+      <table id="repoTable">
+        <thead><tr id="theadRow"></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Stale repositories</h2>
+    <p class="sub">No commits in 6+ months — candidates for archive, consolidation, or ownership review.</p>
+    <div class="tablewrap">
+      <table class="stale-table">
+        <thead><tr><th>Repo</th><th>Last commit</th><th>Days stale</th><th>Primary language</th><th>Open issues</th></tr></thead>
+        <tbody id="staleBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Tech stack distribution</h2>
+    <p class="sub">Primary language and detected framework spread across the portfolio.</p>
+    <div class="charts">
+      <div class="chartcard"><h3>Languages</h3><div id="langChart"></div></div>
+      <div class="chartcard"><h3>Frameworks &amp; platforms</h3><div id="fwChart"></div></div>
+    </div>
+  </section>
+
+</main>
+
+<div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <button class="close" onclick="closeModal()">&times;</button>
+    <h3 id="modalTitle"></h3>
+    <p class="sub" id="modalSub"></p>
+    <div class="ev" id="modalEvidence"></div>
+    <p class="audit-note">Audit trail: every finding above records the exact GitHub API endpoint or file path it was derived from. Raw structured data is retained in <code>portfolio-data.json</code>.</p>
+  </div>
+</div>
+
+<footer>
+  <span>Cognition — CIO portfolio scanner</span>
+  <span id="footMeta"></span>
+</footer>
+
+<script>
+let DATA = null;
+let sortKey = 'healthScore', sortDir = 1;
+
+const COLS = [
+  { key: 'name', label: 'Name' },
+  { key: 'techStack', label: 'Tech stack' },
+  { key: 'daysSinceLastPush', label: 'Last commit' },
+  { key: 'healthScore', label: 'Health' },
+  { key: 'ci', label: 'CI' },
+  { key: 'sec', label: 'Security scanning' },
+  { key: 'agents', label: 'Agents/bots' },
+  { key: 'integrations', label: 'External integrations' },
+  { key: 'vulns', label: 'Open vuln alerts' },
+];
+
+fetch('portfolio-data.json').then(r => r.json()).then(init).catch(() => {});
+function loadFromFile(f) {
+  const rd = new FileReader();
+  rd.onload = () => init(JSON.parse(rd.result));
+  rd.readAsText(f);
+}
+
+function scoreClass(s) { return s >= 70 ? 'g' : s >= 40 ? 'y' : 'r'; }
+function fmtAgo(days) {
+  if (days == null || days > 9000) return '—';
+  if (days === 0) return 'today';
+  if (days < 30) return days + 'd ago';
+  if (days < 365) return Math.round(days / 30) + 'mo ago';
+  return (days / 365).toFixed(1) + 'y ago';
+}
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function init(data) {
+  DATA = data;
+  document.getElementById('loader').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  const s = data.summary;
+  document.getElementById('scanMeta').innerHTML =
+    `org: <b>${esc(s.org)}</b><br>scanned ${new Date(s.scanCompletedAt).toLocaleString()} &middot; ${s.apiCallCount} API calls`;
+  document.getElementById('footMeta').textContent =
+    `Scan ${s.scanStartedAt} → ${s.scanCompletedAt} · scanner v${s.scannerVersion} · ${s.totalRepos} repos`;
+
+  const langCounts = {};
+  for (const r of data.repos) { const l = r.primaryLanguage || 'Unknown'; langCounts[l] = (langCounts[l] || 0) + 1; }
+  const topLangs = Object.entries(langCounts).sort((a, b) => b[1] - a[1]).slice(0, 3).map(x => x[0]).join(', ');
+
+  const stats = [
+    { n: s.totalRepos, l: 'Total repos' },
+    { n: s.activeRepos, l: 'Active (≤6mo)', cls: 'good' },
+    { n: s.staleRepos, l: 'Stale (>6mo)', cls: s.staleRepos > 0 ? 'warn' : '' },
+    { n: s.archivedRepos, l: 'Archived' },
+    { n: s.reposWithAgents, l: 'Repos with agents/bots' },
+    { n: s.reposWithCI, l: 'With CI/CD' },
+    { n: s.reposWithSecurityScanning, l: 'With security scanning' },
+    { n: s.totalOpenVulnerabilityAlerts, l: 'Open vuln alerts', cls: s.totalOpenVulnerabilityAlerts > 0 ? 'warn' : 'good' },
+    { n: topLangs, l: 'Top languages', small: true },
+  ];
+  document.getElementById('summaryBar').innerHTML = stats.map(st =>
+    `<div class="stat ${st.cls || ''}"><div class="num" style="${st.small ? 'font-size:15px;line-height:1.9' : ''}">${esc(st.n)}</div><div class="lbl">${esc(st.l)}</div></div>`).join('');
+
+  renderHeatmap();
+  renderAgents();
+  renderTableHead();
+  renderTable();
+  renderStale();
+  renderCharts();
+  document.getElementById('search').addEventListener('input', renderTable);
+  document.getElementById('filterSel').addEventListener('change', renderTable);
+}
+
+function renderHeatmap() {
+  const repos = [...DATA.repos].filter(r => !r.scanFailed).sort((a, b) => a.healthScore - b.healthScore);
+  document.getElementById('heatmap').innerHTML = repos.map((r, i) =>
+    `<div class="cell ${scoreClass(r.healthScore)}" onclick="openModal('${esc(r.name)}')" title="${esc(r.name)}: ${r.healthScore}/100">
+      <div class="nm">${esc(r.name)}</div><div class="sc">${r.healthScore}/100 · ${fmtAgo(r.daysSinceLastPush)}</div></div>`).join('');
+}
+
+function renderAgents() {
+  const repos = DATA.repos.filter(r => r.agents && r.agents.detected);
+  const el = document.getElementById('agentPanel');
+  if (!repos.length) { el.innerHTML = '<p class="sub">No agents or automations detected.</p>'; return; }
+  el.innerHTML = repos.map(r => {
+    const sched = r.agents.scheduledActions.length
+      ? `<div class="row"><b>Scheduled Actions:</b> ${r.agents.scheduledActions.map(esc).join(', ')}${r.agents.workflowCronExpressions.length ? ' — <code>' + r.agents.workflowCronExpressions.map(esc).join('</code> <code>') + '</code>' : ''}</div>` : '';
+    const deps = r.agents.dependencySignals.length
+      ? `<div class="row"><b>Bot/agent dependencies:</b> ${r.agents.dependencySignals.map(esc).join(', ')}</div>` : '';
+    const wf = r.ci.workflows.length ? `<div class="row"><b>Workflows:</b> ${r.ci.workflows.length} total</div>` : '';
+    return `<div class="agentcard"><h3><a href="${esc(r.htmlUrl)}" target="_blank">${esc(r.name)}</a></h3>${sched}${deps}${wf}
+      <div class="row"><a href="#" onclick="openModal('${esc(r.name)}');return false">View audit trail →</a></div></div>`;
+  }).join('');
+}
+
+function renderTableHead() {
+  document.getElementById('theadRow').innerHTML = COLS.map(c =>
+    `<th onclick="setSort('${c.key}')">${c.label} <span class="arrow">${sortKey === c.key ? (sortDir > 0 ? '▲' : '▼') : ''}</span></th>`).join('');
+}
+function setSort(k) { if (sortKey === k) sortDir *= -1; else { sortKey = k; sortDir = 1; } renderTableHead(); renderTable(); }
+
+function sortVal(r, k) {
+  switch (k) {
+    case 'name': return r.name.toLowerCase();
+    case 'techStack': return (r.techStack || []).join(',');
+    case 'daysSinceLastPush': return r.daysSinceLastPush;
+    case 'healthScore': return r.healthScore;
+    case 'ci': return r.ci && r.ci.hasCI ? 1 : 0;
+    case 'sec': return r.security && (r.security.hasDependabotConfig || r.security.ciSecurityTools.length) ? 1 : 0;
+    case 'agents': return r.agents && r.agents.detected ? 1 : 0;
+    case 'integrations': return (r.externalIntegrations || []).length;
+    case 'vulns': return (r.security && r.security.openVulnerabilityAlerts) || 0;
+  }
+}
+
+function renderTable() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const f = document.getElementById('filterSel').value;
+  let repos = DATA.repos.filter(r => !r.scanFailed);
+  if (f === 'agents') repos = repos.filter(r => r.agents.detected);
+  else if (f === 'noci') repos = repos.filter(r => !r.ci.hasCI);
+  else if (f === 'nosec') repos = repos.filter(r => !r.security.hasDependabotConfig && !r.security.ciSecurityTools.length);
+  else if (f === 'stale') repos = repos.filter(r => r.daysSinceLastPush > 180 && !r.archived);
+  else if (f === 'archived') repos = repos.filter(r => r.archived);
+  if (q) repos = repos.filter(r =>
+    r.name.toLowerCase().includes(q) ||
+    (r.techStack || []).join(' ').toLowerCase().includes(q) ||
+    (r.dependencies || []).some(d => d.dep.toLowerCase().includes(q)));
+  repos.sort((a, b) => { const x = sortVal(a, sortKey), y = sortVal(b, sortKey); return (x < y ? -1 : x > y ? 1 : 0) * sortDir; });
+
+  document.getElementById('tbody').innerHTML = repos.map(r => {
+    const sec = r.security.hasDependabotConfig || r.security.ciSecurityTools.length;
+    const secLabel = sec ? [...new Set([...(r.security.ciSecurityTools || []), ...(r.security.hasDependabotConfig ? ['dependabot'] : [])])].join(', ') : '';
+    const agentLabel = r.agents.detected
+      ? [...r.agents.scheduledActions.map(() => 'scheduled-action'), ...r.agents.dependencySignals].filter((v, i, a) => a.indexOf(v) === i).slice(0, 3).join(', ')
+      : '';
+    const vulns = r.security.openVulnerabilityAlerts;
+    return `<tr>
+      <td class="name"><a href="#" onclick="openModal('${esc(r.name)}');return false">${esc(r.name)}</a>${r.archived ? ' <span class="pill n">archived</span>' : ''}</td>
+      <td class="stack" title="${esc((r.techStack || []).join(', '))}">${esc((r.techStack || []).slice(0, 4).join(', ')) || '—'}</td>
+      <td>${fmtAgo(r.daysSinceLastPush)}</td>
+      <td><span class="pill ${scoreClass(r.healthScore)}">${r.healthScore}</span></td>
+      <td><span class="dot ${r.ci.hasCI ? 'yes' : 'no'}">●</span> ${r.ci.hasCI ? esc(r.ci.systems.join(', ')) : 'no'}</td>
+      <td><span class="dot ${sec ? 'yes' : 'no'}">●</span> ${sec ? esc(secLabel) : 'no'}</td>
+      <td>${r.agents.detected ? `<span class="pill y">${esc(agentLabel)}</span>` : '—'}</td>
+      <td>${(r.externalIntegrations || []).length || '—'}</td>
+      <td>${vulns == null ? '<span class="pill n">n/a</span>' : vulns > 0 ? `<span class="pill r">${vulns}</span>` : '0'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderStale() {
+  const stale = DATA.repos.filter(r => !r.scanFailed && !r.archived && r.daysSinceLastPush > 180)
+    .sort((a, b) => b.daysSinceLastPush - a.daysSinceLastPush);
+  document.getElementById('staleBody').innerHTML = stale.length ? stale.map(r =>
+    `<tr><td class="name"><a href="${esc(r.htmlUrl)}" target="_blank">${esc(r.name)}</a></td>
+     <td>${r.lastPush ? new Date(r.lastPush).toLocaleDateString() : '—'}</td>
+     <td class="days">${r.daysSinceLastPush}</td>
+     <td>${esc(r.primaryLanguage)}</td><td>${r.openIssues}</td></tr>`).join('')
+    : '<tr><td colspan="5">No stale repositories — entire portfolio active within 6 months.</td></tr>';
+}
+
+function barChart(elId, counts, max) {
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const top = entries.length ? entries[0][1] : 1;
+  document.getElementById(elId).innerHTML = entries.map(([k, v]) =>
+    `<div class="bar"><span>${esc(k)}</span><div class="track"><div class="fill" style="width:${(v / top) * 100}%"></div></div><span class="ct">${v}</span></div>`).join('');
+}
+
+function renderCharts() {
+  const langCounts = {}, fwCounts = {};
+  for (const r of DATA.repos) {
+    if (r.scanFailed) continue;
+    const l = r.primaryLanguage || 'Unknown';
+    langCounts[l] = (langCounts[l] || 0) + 1;
+    for (const t of (r.techStack || [])) {
+      if (!(t in DATA._langKeys || {}) && t[0] === t[0].toLowerCase()) fwCounts[t] = (fwCounts[t] || 0) + 1;
+    }
+  }
+  barChart('langChart', langCounts);
+  barChart('fwChart', fwCounts);
+}
+
+function openModal(name) {
+  const r = DATA.repos.find(x => x.name === name);
+  if (!r) return;
+  document.getElementById('modalTitle').textContent = r.name;
+  document.getElementById('modalSub').innerHTML =
+    `${esc(r.description || 'No description')} · <a href="${esc(r.htmlUrl)}" target="_blank">view on GitHub</a><br>` +
+    `Health <b>${r.healthScore}/100</b> · ${r.commits90d || 0} commits / ${r.activeContributors90d || 0} contributors in 90d · ` +
+    `${(r.authPatterns || []).length ? 'auth: ' + r.authPatterns.join(', ') : 'no auth patterns detected'}`;
+  const ev = (r.evidence || []);
+  const integ = (r.externalIntegrations || []).map(x => ({ finding: `external integration: ${x.url}`, source: x.source }));
+  const errs = (r.errors || []).map(e => ({ finding: `scan error: ${e}`, source: 'scanner' }));
+  document.getElementById('modalEvidence').innerHTML = [...ev, ...integ, ...errs].map(e =>
+    `<div class="ev-item">${esc(e.finding)}<br><span class="src">${esc(e.source)}</span></div>`).join('') || '<p class="sub">No findings recorded.</p>';
+  document.getElementById('modalBg').classList.add('open');
+}
+function closeModal() { document.getElementById('modalBg').classList.remove('open'); }
+</script>
+</body>
+</html>

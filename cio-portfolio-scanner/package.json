@@ -1,0 +1,14 @@
+{
+  "name": "cio-portfolio-scanner",
+  "version": "1.0.0",
+  "description": "Scans a GitHub organization and generates a static portfolio health dashboard (observability, discoverability, auditability).",
+  "main": "scanner.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "scan": "node scanner.js",
+    "serve": "npx http-server -p 8080 -c-1 ."
+  },
+  "dependencies": {}
+}
