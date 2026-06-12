@@ -20,7 +20,8 @@ export class TokenValidation extends Component {
       return;
     }
     // Otherwise, ask the middle tier for the token from the httpOnly cookie.
-    axios.get('/talentmap/tokenValidation/token', { withCredentials: true })
+    const tokenEndpoint = `${process.env.PUBLIC_URL || '/talentmap'}/tokenValidation/token`.replace('//', '/');
+    axios.get(tokenEndpoint, { withCredentials: true })
       .then(response => this.props.tokenValidationRequest(response.data.token))
       .catch(() => this.props.tokenValidationRequest(null));
   }
