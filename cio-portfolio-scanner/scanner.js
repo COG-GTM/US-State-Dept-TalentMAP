@@ -10,7 +10,7 @@
  *
  * Usage:
  *   export GITHUB_TOKEN=ghp_xxxxx
- *   node scanner.js --org <org-name> [--output portfolio-data.json] [--limit N]
+ *   node scanner.js --org <org-name> [--output portfolio-data.json] [--limit N] [--concurrency N]
  */
 
 'use strict';
@@ -22,14 +22,15 @@ const API = 'https://api.github.com';
 
 // ---------- CLI ----------
 function parseArgs(argv) {
-  const args = { output: 'portfolio-data.json', limit: 0 };
+  const args = { output: 'portfolio-data.json', limit: 0, concurrency: 4 };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--org') args.org = argv[++i];
     else if (a === '--output') args.output = argv[++i];
     else if (a === '--limit') args.limit = parseInt(argv[++i], 10) || 0;
+    else if (a === '--concurrency') args.concurrency = Math.max(1, parseInt(argv[++i], 10) || 4);
     else if (a === '--help' || a === '-h') {
-      console.log('Usage: node scanner.js --org <org-name> [--output portfolio-data.json] [--limit N]');
+      console.log('Usage: node scanner.js --org <org-name> [--output portfolio-data.json] [--limit N] [--concurrency N]');
       process.exit(0);
     }
   }
@@ -273,7 +274,9 @@ async function scanRepo(org, repo, token) {
   if (result.authPatterns.length) log(`auth patterns: ${result.authPatterns.join(', ')}`, 'dependency manifests');
 
   // CI/CD detection
-  const workflows = await gh(`${base}/contents/.github/workflows`, token);
+  const workflows = (rootListing.ok && !rootDirs.includes('.github'))
+    ? { ok: false }
+    : await gh(`${base}/contents/.github/workflows`, token);
   if (workflows.ok && Array.isArray(workflows.data)) {
     result.ci.hasCI = true;
     result.ci.systems.push('GitHub Actions');
@@ -297,6 +300,11 @@ async function scanRepo(org, repo, token) {
     }
   }
   for (const ciFile of CI_FILES) {
+    // Skip API calls for files we already know are absent from the root listing
+    if (rootListing.ok) {
+      if (ciFile === '.circleci/config.yml') { if (!rootDirs.includes('.circleci')) continue; }
+      else if (!rootFiles.includes(ciFile)) continue;
+    }
     const file = await gh(`${base}/contents/${ciFile}`, token, { raw: true });
     if (file.ok) {
       result.ci.hasCI = true;
@@ -327,7 +335,10 @@ async function scanRepo(org, repo, token) {
   // External integrations (env/config/compose files)
   for (const cf of ENV_CONFIG_FILES) {
     const baseName = cf.split('/').pop();
-    if (rootFiles.length > 0 && !cf.includes('/') && !rootFiles.includes(baseName)) continue;
+    if (rootListing.ok) {
+      if (!cf.includes('/') && !rootFiles.includes(baseName)) continue;
+      if (cf.includes('/') && !rootDirs.includes(cf.split('/')[0])) continue;
+    }
     const file = await gh(`${base}/contents/${cf}`, token, { raw: true });
     if (file.ok) {
       const urls = extractExternalUrls(file.data);
@@ -341,7 +352,12 @@ async function scanRepo(org, repo, token) {
   }
 
   // Dependabot config
-  const dependabot = await gh(`${base}/contents/.github/dependabot.yml`, token);
+  if (rootListing.ok && !rootDirs.includes('.github')) {
+    result.security.hasDependabotConfig = false;
+  }
+  const dependabot = (rootListing.ok && !rootDirs.includes('.github'))
+    ? { ok: false }
+    : await gh(`${base}/contents/.github/dependabot.yml`, token);
   result.security.hasDependabotConfig = dependabot.ok;
   if (dependabot.ok) log('Dependabot config present', '.github/dependabot.yml');
 
@@ -387,22 +403,30 @@ async function main() {
   console.log(`Found ${repos.length} repositories`);
   if (args.limit > 0) repos = repos.slice(0, args.limit);
 
-  const results = [];
-  for (let i = 0; i < repos.length; i++) {
-    const repo = repos[i];
-    process.stdout.write(`[${i + 1}/${repos.length}] ${repo.name} ... `);
-    try {
-      const r = await scanRepo(args.org, repo, token);
-      results.push(r);
-      console.log(`health=${r.healthScore} agents=${r.agents.detected ? 'YES' : 'no'} ci=${r.ci.hasCI ? 'yes' : 'no'}`);
-    } catch (e) {
-      console.log(`ERROR: ${e.message} (skipped)`);
-      results.push({
-        name: repo.name, fullName: repo.full_name, htmlUrl: repo.html_url,
-        scanFailed: true, errors: [e.message],
-      });
+  const results = new Array(repos.length);
+  let next = 0;
+  let done = 0;
+  async function worker() {
+    for (;;) {
+      const i = next++;
+      if (i >= repos.length) return;
+      const repo = repos[i];
+      try {
+        const r = await scanRepo(args.org, repo, token);
+        results[i] = r;
+        done++;
+        console.log(`[${done}/${repos.length}] ${repo.name} health=${r.healthScore} agents=${r.agents.detected ? 'YES' : 'no'} ci=${r.ci.hasCI ? 'yes' : 'no'}`);
+      } catch (e) {
+        done++;
+        console.log(`[${done}/${repos.length}] ${repo.name} ERROR: ${e.message} (skipped)`);
+        results[i] = {
+          name: repo.name, fullName: repo.full_name, htmlUrl: repo.html_url,
+          scanFailed: true, errors: [e.message],
+        };
+      }
     }
   }
+  await Promise.all(Array.from({ length: Math.min(args.concurrency, repos.length) }, worker));
 
   const summary = {
     org: args.org,
