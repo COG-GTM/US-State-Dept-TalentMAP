@@ -18,7 +18,9 @@ function login(username, password) {
       // cookie and redirects. The token is never placed in the URL.
       var form = document.createElement('form');
       form.method = 'POST';
-      form.action = '/talentmap/tokenValidation';
+      // derive the app prefix from the login page's own path so the form
+      // works under any PUBLIC_URL
+      form.action = window.location.pathname.replace(/login\.html$/, '') + 'tokenValidation';
       var input = document.createElement('input');
       input.type = 'hidden';
       input.name = 'token';

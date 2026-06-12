@@ -201,18 +201,17 @@ app.post(`${PUBLIC_URL}tokenValidation`, (request, response) => {
   // reject cross-origin POSTs so a third-party page cannot fixate a token cookie
   // compare hosts only, since the protocol seen by the app may differ from the
   // browser's when TLS is terminated at a reverse proxy
-  const origin = request.headers.origin;
-  if (origin) {
-    let originHost;
-    try {
-      originHost = new URL(origin).host;
-    } catch (e) {
-      originHost = null;
-    }
-    if (originHost !== request.headers.host) {
-      response.sendStatus(403);
-      return;
-    }
+  // when Origin is absent, fall back to Referer; reject if neither is present
+  const source = request.headers.origin || request.headers.referer;
+  let sourceHost;
+  try {
+    sourceHost = new URL(source).host;
+  } catch (e) {
+    sourceHost = null;
+  }
+  if (!sourceHost || sourceHost !== request.headers.host) {
+    response.sendStatus(403);
+    return;
   }
   const token = request.body && request.body.token;
   if (!token || !/^[A-Za-z0-9._-]+$/.test(token)) {
