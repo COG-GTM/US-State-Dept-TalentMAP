@@ -3,6 +3,7 @@ const bodyParser = require('body-parser');
 const bunyan = require('bunyan');
 const helmet = require('helmet');
 const path = require('path');
+const { URL } = require('url');
 const routesArray = require('./routes.js');
 const { metadata, login } = require('./saml2-config');
 
@@ -49,12 +50,43 @@ const port = process.env.PORT || 3000;
 // set up logger
 const logger = bunyan.createLogger({ name: 'TalentMAP' });
 
+// headers that must never be written to logs
+const SENSITIVE_HEADERS = ['authorization', 'proxy-authorization', 'cookie', 'set-cookie', 'x-api-key'];
+
+// return a copy of the headers with sensitive values redacted
+const sanitizeHeaders = (headers) => {
+  const sanitized = Object.assign({}, headers);
+  SENSITIVE_HEADERS.forEach((header) => {
+    if (sanitized[header] !== undefined) {
+      sanitized[header] = '[REDACTED]';
+    }
+  });
+  return sanitized;
+};
+
+// only allow alphanumeric ids (with dashes/underscores) in redirect paths
+const isValidRedirectId = id => /^[A-Za-z0-9_-]+$/.test(id);
+
+// read a single cookie value from the raw Cookie header
+const getCookie = (request, name) => {
+  const cookieHeader = request.headers.cookie || '';
+  const match = cookieHeader.split(';')
+    .map(part => part.trim())
+    .find(part => part.startsWith(`${name}=`));
+  if (!match) { return null; }
+  try {
+    return decodeURIComponent(match.slice(name.length + 1));
+  } catch (e) {
+    return null;
+  }
+};
+
 // logging middleware
 const loggingMiddleware = (request, response, next) => {
   // object to log
   const log = {
     method: request.method,
-    headers: request.headers,
+    headers: sanitizeHeaders(request.headers),
     url: request.url,
     query: request.query,
   };
@@ -79,8 +111,47 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.disable('x-powered-by');
 
 // middleware for HTTP headers
-app.use(helmet());
-app.use(helmet.noCache());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:'],
+      fontSrc: ["'self'", 'data:'],
+      connectSrc: ["'self'", API_ROOT],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+    },
+  },
+  strictTransportSecurity: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true,
+  },
+  // strict-origin-when-cross-origin (not no-referrer) so browsers still send a
+  // usable Origin header on same-origin form POSTs; no-referrer causes Chrome to
+  // serialize Origin as "null", which would break the tokenValidation origin check
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+}));
+
+// disable caching of dynamic responses (replaces removed helmet.noCache())
+app.use((request, response, next) => {
+  response.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  response.set('Pragma', 'no-cache');
+  response.set('Expires', '0');
+  next();
+});
+
+// restrictive CORS: only allow the configured origin (same-origin by default)
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN;
+app.use((request, response, next) => {
+  if (ALLOWED_ORIGIN && request.headers.origin === ALLOWED_ORIGIN) {
+    response.set('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
+    response.set('Vary', 'Origin');
+  }
+  next();
+});
 
 // middleware for static assets
 app.use(PUBLIC_URL, express.static(STATIC_PATH));
@@ -113,10 +184,58 @@ app.get(`${PUBLIC_URL}login`, (request, response) => {
 });
 
 
+// logout: redirect based on auth mode (SAML vs mock/basic)
 app.get(`${PUBLIC_URL}logout`, (request, response) => {
-  response.redirect(`${API_ROOT}/saml2/logout/`);
+  response.clearCookie('tmApiToken', {
+    path: PUBLIC_URL,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+  });
+  response.redirect(SAML_LOGOUT);
 });
 
+// token validation: accept the API token in the request body, store it in an
+// httpOnly cookie, and redirect to the app. This keeps the token out of URLs.
+app.post(`${PUBLIC_URL}tokenValidation`, (request, response) => {
+  // reject cross-origin POSTs so a third-party page cannot fixate a token cookie
+  // compare hosts only, since the protocol seen by the app may differ from the
+  // browser's when TLS is terminated at a reverse proxy
+  // when Origin is absent, fall back to Referer; reject if neither is present
+  const source = request.headers.origin || request.headers.referer;
+  let sourceHost;
+  try {
+    sourceHost = new URL(source).host;
+  } catch (e) {
+    sourceHost = null;
+  }
+  if (!sourceHost || sourceHost !== request.headers.host) {
+    response.sendStatus(403);
+    return;
+  }
+  const token = request.body && request.body.token;
+  if (!token || !/^[A-Za-z0-9._-]+$/.test(token)) {
+    response.sendStatus(400);
+    return;
+  }
+  response.cookie('tmApiToken', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: PUBLIC_URL,
+  });
+  response.redirect(`${PUBLIC_URL}tokenValidation`);
+});
+
+// expose the token from the httpOnly cookie to the same-origin SPA
+app.get(`${PUBLIC_URL}tokenValidation/token`, (request, response) => {
+  const token = getCookie(request, 'tmApiToken');
+  if (!token) {
+    response.sendStatus(404);
+    return;
+  }
+  response.json({ token });
+});
 
 // saml2 metadata
 app.get(`${PUBLIC_URL}metadata`, (request, response) => {
@@ -127,29 +246,37 @@ app.get(`${PUBLIC_URL}metadata`, (request, response) => {
 // OBC redirect - post data detail
 // endpoint for post-specific data points
 app.get(`${PUBLIC_URL}obc/post/data/:id`, (request, response) => {
-  // set the id passed in the route and pass it to the redirect
+  // validate the id before passing it to the redirect
   const id = request.params.id;
-  response.redirect(`${OBC_URL}/post/postdatadetails/${id}`);
-});
-
-app.get(`${PUBLIC_URL}logout`, (request, response) => {
-  response.redirect(SAML_LOGOUT);
+  if (!isValidRedirectId(id)) {
+    response.sendStatus(400);
+    return;
+  }
+  response.redirect(`${OBC_URL}/post/postdatadetails/${encodeURIComponent(id)}`);
 });
 
 // OBC redirect - posts
 // endpoint for post, ie landing page
 app.get(`${PUBLIC_URL}obc/post/:id`, (request, response) => {
-  // set the id passed in the route and pass it to the redirect
+  // validate the id before passing it to the redirect
   const id = request.params.id;
-  response.redirect(`${OBC_URL}/post/detail/${id}`);
+  if (!isValidRedirectId(id)) {
+    response.sendStatus(400);
+    return;
+  }
+  response.redirect(`${OBC_URL}/post/detail/${encodeURIComponent(id)}`);
 });
 
 // OBC redirect - countries
 // endpoint for country, ie landing page
 app.get(`${PUBLIC_URL}obc/country/:id`, (request, response) => {
-  // set the id passed in the route and pass it to the redirect
+  // validate the id before passing it to the redirect
   const id = request.params.id;
-  response.redirect(`${OBC_URL}/country/detail/${id}`);
+  if (!isValidRedirectId(id)) {
+    response.sendStatus(400);
+    return;
+  }
+  response.redirect(`${OBC_URL}/country/detail/${encodeURIComponent(id)}`);
 });
 
 app.get(`${PUBLIC_URL}about/more`, (request, response) => {

@@ -36,7 +36,7 @@ services:
     volumes:
       - ../State-TalentMAP-API/:/app:delegated
     environment:
-      - DJANGO_SECRET_KEY=development_secret_key
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
       - DATABASE_URL=postgres://talentmap-user@db/talentmap
       - DJANGO_DEBUG=true
   db:

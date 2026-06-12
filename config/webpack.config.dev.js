@@ -92,6 +92,10 @@ module.exports = {
       // Support React Native Web
       // https://www.smashingmagazine.com/2016/08/a-glimpse-into-the-future-with-react-native-for-web/
       'react-native': 'react-native-web',
+
+      // Use the pre-bundled UMD browser build of axios; webpack 2 cannot parse
+      // the ESM source that axios's package entry points resolve to.
+      axios$: path.resolve(__dirname, '../node_modules/axios/dist/axios.js'),
     },
     plugins: [
       // Prevents users from importing files from outside of src/ (or node_modules/).
@@ -137,7 +141,7 @@ module.exports = {
       {
         exclude: [
           /\.html$/,
-          /\.(js|jsx)$/,
+          /\.(js|jsx|cjs)$/,
           /\.css$/,
           /\.json$/,
           /\.bmp$/,

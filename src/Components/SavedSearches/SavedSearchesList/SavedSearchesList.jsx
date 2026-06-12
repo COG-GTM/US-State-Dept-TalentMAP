@@ -41,7 +41,7 @@ class SavedSearchesList extends Component {
   }
 
   componentWillUnmount() {
-    window.addEventListener('resize', null);
+    window.removeEventListener('resize', this.updateScroll);
   }
 
   setContainerRef(el) {

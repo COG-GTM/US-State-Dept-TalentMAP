@@ -54,6 +54,25 @@ describe('SavedSearchesListComponent', () => {
     expect(wrapper).toBeDefined();
   });
 
+  it('removes the resize listener with the same handler on unmount', () => {
+    const addSpy = sinon.spy();
+    const removeSpy = sinon.spy();
+    window.addEventListener = addSpy;
+    window.removeEventListener = removeSpy;
+    const wrapper = shallow(
+      <SavedSearchesList
+        {...props}
+      />,
+    );
+    const instance = wrapper.instance();
+    instance.componentDidMount();
+    instance.componentWillUnmount();
+    expect(addSpy.calledWith('resize', instance.updateScroll)).toBe(true);
+    expect(removeSpy.calledWith('resize', instance.updateScroll)).toBe(true);
+    // the exact same function reference must be used for add and remove
+    expect(addSpy.firstCall.args[1]).toBe(removeSpy.firstCall.args[1]);
+  });
+
   it('can receive props', () => {
     const wrapper = shallow(
       <SavedSearchesList

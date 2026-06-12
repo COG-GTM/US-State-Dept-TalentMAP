@@ -25,12 +25,17 @@ class Notifications extends Component {
 
     // Listen for a route change to refresh notifications,
     // unless the login page is the current route.
-    history.listen((newLocation) => {
+    this.unlisten = history.listen((newLocation) => {
       if (newLocation.pathname !== loginRoute) {
         fetchNotificationsCount();
       }
     });
   }
+
+  componentWillUnmount() {
+    if (this.unlisten) { this.unlisten(); }
+  }
+
   render() {
     const { notificationsCount } = this.props;
     return (

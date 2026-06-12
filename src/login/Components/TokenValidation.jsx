@@ -1,6 +1,6 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
-import queryString from 'query-string';
+import axios from 'axios';
 
 import { EMPTY_FUNCTION } from '../../Constants/PropTypes';
 import Alert from '../../Components/Alert/Alert';
@@ -9,18 +9,21 @@ import { auth } from '../sagas';
 import { initialState } from '../reducer';
 
 export class TokenValidation extends Component {
-  // Check for token on component mount
+  // Check for token on component mount.
+  // The token is never read from the URL; it is retrieved from the
+  // server, which stores it in an httpOnly cookie.
   componentWillMount() {
-    const query = window.location.search.replace('?', '') || '';
-    const parsedQuery = queryString.parse(query);
-    // First check to see if there's a token in the query params.
-    let token = parsedQuery.tmApiToken;
-    // If not, check if one exists in the cookies.
-    if (!token) { token = auth.get(); }
-    // If neither criteria is met, set the token to null which will cause a failure.
-    if (!token) { token = null; }
-    // Finally, pass that token to the tokenValidationRequest function
-    this.props.tokenValidationRequest(token);
+    // First check if a token exists in local auth storage.
+    const storedToken = auth.get();
+    if (storedToken) {
+      this.props.tokenValidationRequest(storedToken);
+      return;
+    }
+    // Otherwise, ask the middle tier for the token from the httpOnly cookie.
+    const tokenEndpoint = `${process.env.PUBLIC_URL || '/talentmap'}/tokenValidation/token`.replace('//', '/');
+    axios.get(tokenEndpoint, { withCredentials: true })
+      .then(response => this.props.tokenValidationRequest(response.data.token))
+      .catch(() => this.props.tokenValidationRequest(null));
   }
 
   render() {

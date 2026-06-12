@@ -89,6 +89,10 @@ module.exports = {
       // Support React Native Web
       // https://www.smashingmagazine.com/2016/08/a-glimpse-into-the-future-with-react-native-for-web/
       'react-native': 'react-native-web',
+
+      // Use the pre-bundled UMD browser build of axios; webpack 2 cannot parse
+      // the ESM source that axios's package entry points resolve to.
+      axios$: path.resolve(__dirname, '../node_modules/axios/dist/axios.js'),
     },
     plugins: [
       // Prevents users from importing files from outside of src/ (or node_modules/).
@@ -133,7 +137,7 @@ module.exports = {
       {
         exclude: [
           /\.html$/,
-          /\.(js|jsx)$/,
+          /\.(js|jsx|cjs)$/,
           /\.css$/,
           /\.json$/,
           /\.bmp$/,
@@ -164,6 +168,17 @@ module.exports = {
         loader: require.resolve('babel-loader'),
         options: {
           'plugins': ['lodash'],
+        },
+      },
+      // Transpile ES2015+ dependencies that ship untranspiled code,
+      // since UglifyJS only understands ES5.
+      {
+        test: /\.(js|cjs)$/,
+        include: /node_modules[/\\](axios|query-string|strict-uri-encode|split-on-first|filter-obj|decode-uri-component)[/\\]/,
+        loader: require.resolve('babel-loader'),
+        options: {
+          babelrc: false,
+          presets: [require.resolve('babel-preset-react-app')],
         },
       },
       // The notation here is somewhat confusing.
@@ -336,6 +351,7 @@ module.exports = {
     new LodashModuleReplacementPlugin({
       collections: true,
       paths: true,
+      shorthands: true,
     }),
   ],
   // Some libraries import Node modules but don't use them in the browser.

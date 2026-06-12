@@ -36,6 +36,14 @@
   "rules": {
     // allow names to be the same as the default for Redux container testing
     "import/no-named-as-default": [0],
+    // same as airbnb, plus cjs/mjs so packages like axios that resolve to a
+    // .cjs entry point can be imported without an extension
+    "import/extensions": ["error", "always", {
+      "js": "never",
+      "jsx": "never",
+      "mjs": "never",
+      "cjs": "never"
+    }],
     // allow test files to import packages in devDependencies
     // https://github.com/benmosher/eslint-plugin-import/blob/master/docs/rules/no-extraneous-dependencies.md
     "import/no-extraneous-dependencies": ["error", {
