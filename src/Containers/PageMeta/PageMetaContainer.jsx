@@ -7,7 +7,7 @@ import routes from '../../routes';
 import { getApplicationPath, getAssetPath, focusById } from '../../utilities';
 import getBestMatchPath from './helpers';
 
-class PageMetaContainer extends Component {
+export class PageMetaContainer extends Component {
   constructor(props) {
     super(props);
 
@@ -16,6 +16,10 @@ class PageMetaContainer extends Component {
 
   componentWillMount() {
     this.getPageTitle();
+  }
+
+  componentWillUnmount() {
+    if (this.unlisten) { this.unlisten(); }
   }
 
   // Determine the route's page title and set it to state
@@ -33,8 +37,8 @@ class PageMetaContainer extends Component {
     this.setPageTitle(history.location);
     focusById('page-title');
 
-    // listen for changes in history
-    history.listen((historyObject) => {
+    // listen for changes in history; keep the unlisten function for cleanup
+    this.unlisten = history.listen((historyObject) => {
       focusById('page-title');
       this.setPageTitle(historyObject);
     });

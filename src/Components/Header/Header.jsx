@@ -40,6 +40,10 @@ export class Header extends Component {
     this.checkPath();
   }
 
+  componentWillUnmount() {
+    if (this.unlisten) { this.unlisten(); }
+  }
+
   onFilterChange(q) {
     const { searchbarFilters, setSearchFilters } = this.props;
     setSearchFilters({ ...searchbarFilters, ...q });
@@ -58,7 +62,7 @@ export class Header extends Component {
 
   checkPath() {
     const { history } = this.props;
-    history.listen((historyObject) => {
+    this.unlisten = history.listen((historyObject) => {
       this.matchCurrentPath(historyObject);
     });
   }

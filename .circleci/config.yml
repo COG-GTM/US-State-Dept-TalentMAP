@@ -1,7 +1,7 @@
 version: 2.0
 default-docker-node: &default-docker-node
   docker:
-    - image: circleci/node:6.11.0
+    - image: cimg/node:20.19
       environment:
         TZ: "/usr/share/zoneinfo/America/New_York"
         CC_TEST_REPORTER_ID: c05c8cb360b66d7b92767ad0ffdeef2c8519f390d700b8bc2d2b7ee6c2760791

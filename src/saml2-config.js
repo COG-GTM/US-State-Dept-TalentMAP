@@ -23,30 +23,47 @@ if (fs.existsSync(keyFile)) { privateKey = fs.readFileSync(keyFile); }
 if (fs.existsSync(certFile)) { cert = fs.readFileSync(certFile); }
 if (fs.existsSync(ssoCertFile)) { ssoCert = fs.readFileSync(ssoCertFile); }
 
-// Create service provider with options
-const serviceProvider = new saml2.ServiceProvider({
-  entity_id: ENTITY_ID,
-  private_key: privateKey,
-  certificate: cert,
-  assert_endpoint: ASSERT_ENDPOINT,
-  force_authn: true,
-});
+// saml2-js requires valid certificates; only configure the providers when
+// certs are present (e.g. mock SAML mode and tests run without them)
+const hasCerts = Boolean(privateKey && cert && ssoCert);
 
-const identityProvider = new saml2.IdentityProvider({
-  sso_login_url: SSO_LOGIN_URL,
-  sso_logout_url: SSO_LOGOUT_URL,
-  certificates: [ssoCert],
-});
+let metadata = null;
+let serviceProvider = null;
+let identityProvider = null;
 
-// Example use of service provider.
-// Call metadata to get XML metatadata used in configuration.
-const metadata = serviceProvider.create_metadata();
+if (hasCerts) {
+  // Create service provider with options
+  serviceProvider = new saml2.ServiceProvider({
+    entity_id: ENTITY_ID,
+    private_key: privateKey,
+    certificate: cert,
+    assert_endpoint: ASSERT_ENDPOINT,
+    force_authn: true,
+  });
+
+  identityProvider = new saml2.IdentityProvider({
+    sso_login_url: SSO_LOGIN_URL,
+    sso_logout_url: SSO_LOGOUT_URL,
+    certificates: [ssoCert],
+  });
+
+  // Call metadata to get XML metatadata used in configuration.
+  metadata = serviceProvider.create_metadata();
+}
 
 const login = (handler) => {
+  if (!hasCerts) {
+    handler(new Error('SAML certificates are not configured'));
+    return;
+  }
   serviceProvider.create_login_request_url(identityProvider, {}, handler);
 };
 
 const logout = (handler) => {
+  if (!hasCerts) {
+    handler(new Error('SAML certificates are not configured'));
+    return;
+  }
   serviceProvider.create_logout_request_url(identityProvider, {}, handler);
 };
 
