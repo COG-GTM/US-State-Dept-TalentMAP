@@ -177,7 +177,7 @@ app.get(`${PUBLIC_URL}login`, (request, response) => {
 
 // logout: redirect based on auth mode (SAML vs mock/basic)
 app.get(`${PUBLIC_URL}logout`, (request, response) => {
-  response.clearCookie('tmApiToken');
+  response.clearCookie('tmApiToken', { path: PUBLIC_URL });
   response.redirect(SAML_LOGOUT);
 });
 
