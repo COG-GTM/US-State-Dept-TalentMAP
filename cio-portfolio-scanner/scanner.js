@@ -38,13 +38,22 @@ function parseArgs(argv) {
 }
 
 // ---------- Rate-limited fetch ----------
-const DELAY_MS = 120; // ~8 req/s, well under 5000/hr authenticated limit
+const DELAY_MS = 120; // ~8 req/s aggregate, well under 5000/hr authenticated limit
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let apiCallCount = 0;
 
+// Shared pacing across all concurrent workers so the aggregate rate stays ~1/DELAY_MS
+let nextSlot = 0;
+async function throttle() {
+  const now = Date.now();
+  nextSlot = Math.max(nextSlot + DELAY_MS, now);
+  const waitMs = nextSlot - now;
+  if (waitMs > 0) await sleep(waitMs);
+}
+
 async function gh(url, token, { raw = false, allowError = true } = {}) {
-  await sleep(DELAY_MS);
+  await throttle();
   apiCallCount++;
   const headers = {
     Authorization: `Bearer ${token}`,
@@ -364,7 +373,7 @@ async function scanRepo(org, repo, token) {
   // Code quality / security tooling files at root
   if (rootFiles.includes('.codeclimate.yml')) log('CodeClimate config present', '.codeclimate.yml');
   if (rootFiles.includes('.snyk')) {
-    result.security.ciSecurityTools.push('snyk');
+    if (!result.security.ciSecurityTools.includes('snyk')) result.security.ciSecurityTools.push('snyk');
     log('Snyk policy present', '.snyk');
   }
 
