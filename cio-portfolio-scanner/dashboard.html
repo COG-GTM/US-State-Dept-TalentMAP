@@ -383,7 +383,7 @@ function renderCharts() {
     const l = r.primaryLanguage || 'Unknown';
     langCounts[l] = (langCounts[l] || 0) + 1;
     for (const t of (r.techStack || [])) {
-      if (!(t in DATA._langKeys || {}) && t[0] === t[0].toLowerCase()) fwCounts[t] = (fwCounts[t] || 0) + 1;
+      if (t && t[0] === t[0].toLowerCase()) fwCounts[t] = (fwCounts[t] || 0) + 1;
     }
   }
   barChart('langChart', langCounts);
