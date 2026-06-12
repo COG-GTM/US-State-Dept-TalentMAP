@@ -184,6 +184,12 @@ app.get(`${PUBLIC_URL}logout`, (request, response) => {
 // token validation: accept the API token in the request body, store it in an
 // httpOnly cookie, and redirect to the app. This keeps the token out of URLs.
 app.post(`${PUBLIC_URL}tokenValidation`, (request, response) => {
+  // reject cross-origin POSTs so a third-party page cannot fixate a token cookie
+  const origin = request.headers.origin;
+  if (origin && origin !== `${request.protocol}://${request.headers.host}`) {
+    response.sendStatus(403);
+    return;
+  }
   const token = request.body && request.body.token;
   if (!token || !/^[A-Za-z0-9._-]+$/.test(token)) {
     response.sendStatus(400);
