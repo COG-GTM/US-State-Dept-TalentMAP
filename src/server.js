@@ -129,7 +129,10 @@ app.use(helmet({
     includeSubDomains: true,
     preload: true,
   },
-  referrerPolicy: { policy: 'no-referrer' },
+  // strict-origin-when-cross-origin (not no-referrer) so browsers still send a
+  // usable Origin header on same-origin form POSTs; no-referrer causes Chrome to
+  // serialize Origin as "null", which would break the tokenValidation origin check
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
 }));
 
 // disable caching of dynamic responses (replaces removed helmet.noCache())
@@ -183,7 +186,12 @@ app.get(`${PUBLIC_URL}login`, (request, response) => {
 
 // logout: redirect based on auth mode (SAML vs mock/basic)
 app.get(`${PUBLIC_URL}logout`, (request, response) => {
-  response.clearCookie('tmApiToken', { path: PUBLIC_URL });
+  response.clearCookie('tmApiToken', {
+    path: PUBLIC_URL,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+  });
   response.redirect(SAML_LOGOUT);
 });
 
